@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가위바위보 AI 판별기</title>
+    <style>
+        /* 전역 스타일 초기화 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #334155;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            background-color: #ffffff;
+            max-width: 600px;
+            width: 100%;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+
+        /* 🖐️ 손모양 가위바위보 가이드 영역 */
+        .guide-section {
+            display: flex;
+            justify-content: space-around;
+            background-color: #f8fafc;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            border: 1px solid #e2e8f0;
+        }
+        .guide-item {
+            flex: 1;
+            text-align: center;
+        }
+        .guide-item img {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+            margin-bottom: 6px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            padding: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .guide-item p {
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        /* 🎬 제어 및 웹캠 영역 */
+        .start-btn {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+        .start-btn:hover {
+            background-color: #1d4ed8;
+        }
+
+        #webcam-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        #webcam-container canvas {
+            border: 4px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        /* 📊 단일 결과창 영역 (수정됨) */
+        #label-container {
+            max-width: 320px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        #result-display {
+            background-color: #f1f5f9;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s ease-in-out;
+            min-height: 64px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* 분석 중일 때의 스타일 */
+        .analyzing {
+            color: #64748b !important;
+            font-style: italic;
+            background-color: #f8fafc !important;
+            border-style: dashed !important;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Teachable Machine 가위바위보</h1>
+    <p class="subtitle">아래 손 모양 가이드를 참고하여 카메라 앞에서 흉내 내 보세요!</p>
+
+    <div class="guide-section">
+        <div class="guide-item">
+            <img src="rock.png" alt="바위">
+            <p>바위 (Rock)</p>
+        </div>
+        <div class="guide-item">
+            <img src="scissors.png" alt="가위">
+            <p>가위 (Scissors)</p>
+        </div>
+        <div class="guide-item">
+            <img src="paper.png" alt="보">
+            <p>보 (Paper)</p>
+        </div>
+    </div>
+
+    <button class="start-btn" type="button" onclick="init()">AI 카메라 시작하기</button>
+
+    <div id="webcam-container"></div>
+
+    <div id="label-container">
+        <div id="result-display" class="analyzing">여기에 결과가 표시됩니다.</div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/B-u58ABRL/";
+
+    let model, webcam, resultDisplay, maxPredictions;
+
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        const flip = true; 
+        webcam = new tmImage.Webcam(240, 240, flip); 
+        await webcam.setup(); 
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        document.getElementById("webcam-container").innerHTML = ""; 
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        
+        resultDisplay = document.getElementById("result-display");
+        resultDisplay.innerText = "준비 완료! 손을 보여주세요.";
+    }
+
+    async function loop() {
+        webcam.update(); 
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        
+        let maxProbability = -1;
+        let bestClassName = "";
+        let duplicateMax = false;
+
+        // 1. 모든 예측값을 순회하며 확률 최댓값 찾기
+        for (let i = 0; i < maxPredictions; i++) {
+            const currentProb = prediction[i].probability;
+            
+            // 현재 확률이 기존 최댓값보다 크면 업데이트
+            if (currentProb > maxProbability) {
+                maxProbability = currentProb;
+                bestClassName = prediction[i].className;
+                duplicateMax = false;
+            } 
+            // 현재 확률이 최댓값과 같으면 중복 표시
+            else if (currentProb === maxProbability && maxProbability > 0) {
+                duplicateMax = true;
+            }
+        }
+
+        // 2. 단일 분석 결과 출력 로직
+        const percent = (maxProbability * 100).toFixed(0);
+
+        // 결과창 스타일 초기화
+        resultDisplay.classList.remove("analyzing");
+        resultDisplay.style.background = "#f1f5f9";
+        resultDisplay.style.borderColor = "#e2e8f0";
+
+        // 확률이 모두 동일하거나 인식이 낮을 경우 처리
+        if (duplicateMax || maxProbability <= 0.1) {
+            resultDisplay.innerText = "분석 중...";
+            resultDisplay.classList.add("analyzing");
+            resultDisplay.style.transform = "scale(1)";
+        } 
+        // 독보적인 최댓값이 발견된 정상 상태 처리
+        else {
+            resultDisplay.innerText = bestClassName + " (" + percent + "%)";
+            // 50%가 넘으면 강조 효과 적용
+            if(percent > 50) {
+                resultDisplay.style.background = "#e0f2fe";
+                resultDisplay.style.borderColor = "#3b82f6";
+                resultDisplay.style.transform = "scale(1.05)";
+            } else {
+                resultDisplay.style.transform = "scale(1)";
+            }
+        }
+    } // 💡  predict 함수를 닫는 중괄호가 여기에 추가되었습니다!
+</script>
+
+</body>
+</html>
